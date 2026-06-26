@@ -1,0 +1,5 @@
+name: XinModBridge
+main: xin.bbtt.modbridge.XinModBridge
+version: 0.1.0-SNAPSHOT
+type: PLUGIN
+description: "Forge/NeoForge (FML) login-handshake bridge so xinbot can join modded servers"
