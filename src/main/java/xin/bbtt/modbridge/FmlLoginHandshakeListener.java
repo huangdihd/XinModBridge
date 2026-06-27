@@ -5,6 +5,7 @@ import org.geysermc.mcprotocollib.network.event.session.PacketSendingEvent;
 import org.geysermc.mcprotocollib.network.event.session.SessionAdapter;
 import org.geysermc.mcprotocollib.network.packet.Packet;
 import org.geysermc.mcprotocollib.protocol.packet.common.clientbound.ClientboundCustomPayloadPacket;
+import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundCustomPayloadPacket;
 import org.geysermc.mcprotocollib.protocol.packet.handshake.serverbound.ClientIntentionPacket;
 import org.geysermc.mcprotocollib.protocol.packet.login.clientbound.ClientboundCustomQueryPacket;
 import org.geysermc.mcprotocollib.protocol.packet.login.serverbound.ServerboundCustomQueryAnswerPacket;
@@ -57,13 +58,12 @@ public final class FmlLoginHandshakeListener extends SessionAdapter {
 
     private void handleConfigurationPayload(Session session, ClientboundCustomPayloadPacket payload) {
         String channel = payload.getChannel().asString();
-        if (!NeoForgeConfigHandshake.isNeoForgeChannel(channel)) {
-            return;
-        }
         byte[] reply = NeoForgeConfigHandshake.handle(channel, payload.getData());
         if (reply != null) {
-            session.send(NeoForgeConfigHandshake.buildReply(channel, reply));
-            log.debug("[XinModBridge] answered NeoForge config payload on '{}'", channel);
+            session.send(new ServerboundCustomPayloadPacket(payload.getChannel(), reply));
+            if (Boolean.getBoolean("modbridge.dumpNeoForge")) {
+                log.info("[XinModBridge][nf-send] -> '{}' ({} bytes)", channel, reply.length);
+            }
         }
     }
 

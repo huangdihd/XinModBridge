@@ -47,7 +47,10 @@ public final class ModBridgeOptions {
     }
 
     public static final class Builder {
-        private boolean injectFmlMarker = false;
+        // On by default: validation against a real Forge 1.20.1 server showed the
+        // marker is required — without it the server treats the bot as a vanilla
+        // client and never starts the FML handshake.
+        private boolean injectFmlMarker = true;
         private String fmlMarkerVersion = "FML3";
         private boolean answerUnknownLoginQueries = true;
         private boolean handleNeoForgeConfiguration = true;

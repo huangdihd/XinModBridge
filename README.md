@@ -4,11 +4,12 @@
 > Forge / NeoForge (FML) login handshake, so the bot can join **modded servers** whose
 > checks are mod-list / channel based — without bundling any mods.
 
-> ⚠️ **Early / experimental (`0.1.0-SNAPSHOT`, pre-release).** The framework, the
-> `fml:loginwrapper` plumbing and the FML3 spoof handshake are implemented and unit-tested
-> for internal consistency, **but have not yet been validated against a live Forge/NeoForge
-> server.** Message indices and field layouts are version-sensitive and very likely need
-> tuning once tested. See **Status** below.
+> ⚠️ **Experimental (`0.1.0-SNAPSHOT`, pre-release).** The Forge **FML2/FML3 login handshake**
+> (`fml:loginwrapper` ModList echo + Acknowledge) is **validated against live Forge servers
+> 1.15.2, 1.16.5, 1.18.2 and 1.20.1** (the last also with real mods). **NeoForge / Forge
+> 1.20.2+** and **legacy FML1 (1.7–1.12)** are **not supported** — see **Status** below for
+> why. Also note: connecting a 1.21.x bot to an older modded server still needs version
+> translation (e.g. [XinVia](https://github.com/huangdihd/XinVia)), which is separate.
 
 ---
 
@@ -20,9 +21,9 @@ there is no single "universal handshake". XinModBridge is a **detect-and-respond
 | Loader | Handling |
 |---|---|
 | **Vanilla / Fabric / Quilt** | Nothing needed — they are protocol-vanilla; connect directly. |
-| **Forge FML2/FML3** (MC 1.13–1.20.1) | Answer the `fml:loginwrapper` login queries; **echo** the server's mod list / channels / registries back so a mod-less bot is accepted. |
-| **NeoForge** (MC 1.20.2+) | Configuration-phase `neoforge:` handshake — **extension point only, not implemented yet.** |
-| **Forge FML1** (MC 1.7–1.12) | Not implemented yet. |
+| **Forge FML2/FML3** (MC ~1.15–1.20.1) | ✅ Answer the `fml:loginwrapper` login queries; **echo** the server's mod list / channels / registries back so a mod-less bot is accepted. The handshake-address marker must match the server's FML net version: `FML2` for ≤ 1.16.x, `FML3` for ≥ 1.18. |
+| **NeoForge** (MC 1.20.2+) | ⛔ Configuration-phase `neoforge:` handshake. Mapped but **not supported** — see Status. |
+| **Forge FML1** (MC 1.7–1.12) | ⛔ PLAY-phase `FML\|HS` handshake — **not implemented.** |
 
 It only targets the common **"does the client have these mods/channels"** style of check.
 Mods that do **behavioural** checks (compute-and-respond, anti-cheat handshakes) cannot be
@@ -58,13 +59,13 @@ import xin.bbtt.modbridge.ModBridgeOptions;
 private FmlLoginHandshakeListener bridge;
 
 public void onEnable() {
-    // Default: reactive FML login handshake, no hostname marker injection.
+    // Default: reactive FML handshake with the FML3 hostname marker (needed so the
+    // server switches into FML mode — without it the bot is treated as vanilla).
     bridge = XinModBridgeProvider.attach(this);
 
-    // Or, for older Forge servers that only switch into FML mode when the
-    // handshake hostname carries a marker:
+    // For older Forge servers (MC ≤ 1.16.x, FML net version 2), use the FML2 marker:
     // bridge = XinModBridgeProvider.attach(this, ModBridgeOptions.builder()
-    //         .injectFmlMarker(true).fmlMarkerVersion("FML3").build());
+    //         .fmlMarkerVersion("FML2").build());
 }
 ```
 
@@ -75,15 +76,24 @@ It composes with [XinVia](https://github.com/huangdihd/XinVia): a meta plugin ca
 
 ## Status
 
-Implemented & tested:
-- Library/plugin scaffold, `XinModBridgeProvider` API, lifecycle, real-xinbot load.
-- `fml:loginwrapper` wrap/unwrap and the FML3 ModList **echo** reply + Acknowledge, with an
-  internal round-trip unit test.
+| Target | Status |
+|---|---|
+| Forge FML2/FML3 — MC 1.15.2, 1.16.5, 1.18.2, 1.20.1 (+ real mods) | ✅ Validated against live servers — bot completes the handshake and joins |
+| NeoForge / Forge 1.20.2+ (configuration phase) | ⛔ Not supported (see below) |
+| Forge FML1 — MC 1.7–1.12 (`FML\|HS`) | ⛔ Not implemented |
 
-Needs a real server to validate / still TODO:
-- Confirm FML3 message indices & field layouts against an actual Forge 1.16–1.20.1 server.
-- FML2 (1.13–1.15) and FML1 (1.7–1.12) variants.
-- NeoForge configuration-phase handshake (`neoforge:`), currently a no-op extension point.
+**Why NeoForge can't be done from here.** NeoForge negotiates its modded network in the
+CONFIGURATION phase. Its `CommonVersion`/`CommonRegister` tasks are only registered if the
+connection already `hasChannel(...)` for them *at the moment `RegisterConfigurationTasksEvent`
+fires* — i.e. at the very start of config, before any client payload is processed. A reactive
+`SessionListener` that declares channels via `minecraft:register` does so too late (verified:
+the replies are sent and received, but the server has already decided its task set). Completing
+it requires driving the client's config-phase state machine the way a real NeoForge client does,
+which is below the mcprotocollib layer this plugin works at. The full protocol trace is kept in
+`NeoForgeConfigHandshake`; run with `-Dmodbridge.dumpNeoForge=true` to reproduce.
+
+**FML1** (1.7–1.12) uses a PLAY-phase `FML|HS` handshake (REGISTER + `FML|HS` ServerHello →
+ClientHello → ModList → …). It is reactively feasible but not yet implemented.
 
 ## Building
 

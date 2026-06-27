@@ -15,11 +15,17 @@ import java.util.Map;
  * {@code fml:loginwrapper} login-query channel, and produces "spoof" replies that
  * echo whatever the server requires so a mod-less bot is accepted.
  *
- * <p><b>Status:</b> implemented against Forge <b>FML3</b> (Minecraft 1.16 – 1.20.1)
- * as documented in Forge's {@code NetworkInitialization} / {@code HandshakeMessages}.
- * The message indices and field layouts below are version-sensitive and have
- * <b>not yet been validated against a live server</b>. FML2 (1.13–1.15) and the
- * NeoForge configuration-phase variant differ and are handled elsewhere / TODO.
+ * <p><b>Status: validated against live Forge servers 1.15.2, 1.16.5, 1.18.2 and 1.20.1</b>
+ * (the last also with real mods: JEI/AppleSkin/Jade). A test client using this code
+ * completed the full handshake and joined each one. The {@code fml:loginwrapper} message
+ * format below turns out to be stable across Forge's FML net version 2 (≤ 1.16.x) and
+ * net version 3 (≥ 1.18) — only the handshake-address marker token differs
+ * ({@code FML2} vs {@code FML3}, see {@link ModBridgeOptions#fmlMarkerVersion()}); a wrong
+ * marker is rejected by the server before the handshake even starts.
+ *
+ * <p>NeoForge / Forge 1.20.2+ use a different CONFIGURATION-phase handshake (see
+ * {@link NeoForgeConfigHandshake}); legacy FML1 (1.7–1.12) uses the PLAY-phase
+ * {@code FML|HS} channel — neither is handled here.
  */
 final class FmlHandshake {
 
