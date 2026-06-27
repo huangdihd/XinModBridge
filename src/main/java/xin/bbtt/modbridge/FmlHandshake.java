@@ -24,8 +24,8 @@ import java.util.Map;
  * marker is rejected by the server before the handshake even starts.
  *
  * <p>NeoForge / Forge 1.20.2+ use a different CONFIGURATION-phase handshake (see
- * {@link NeoForgeConfigHandshake}); legacy FML1 (1.7–1.12) uses the PLAY-phase
- * {@code FML|HS} channel — neither is handled here.
+ * {@link NeoForgeClientListenerWrapper}); legacy FML1 (1.7–1.12) uses the PLAY-phase
+ * {@code FML|HS} channel (see {@link Fml1Handshake}) — neither is handled here.
  */
 final class FmlHandshake {
 

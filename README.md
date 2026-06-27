@@ -1,33 +1,27 @@
 # XinModBridge
 
-> A [xinbot](https://github.com/huangdihd/xinbot) **library plugin** that completes the
-> Forge / NeoForge (FML) login handshake, so the bot can join **modded servers** whose
-> checks are mod-list / channel based — without bundling any mods.
+> A [xinbot](https://github.com/huangdihd/xinbot) **library plugin** that lets the bot join
+> **modded servers** — Forge (FML1/2/3) and NeoForge — by completing their handshakes and
+> tolerating modded packets, all behind a small API for other meta plugins.
 
-> ⚠️ **Experimental (`0.1.0-SNAPSHOT`, pre-release).** The Forge **FML2/FML3 login handshake**
-> (`fml:loginwrapper` ModList echo + Acknowledge) is **validated against live Forge servers
-> 1.15.2, 1.16.5, 1.18.2 and 1.20.1** (the last also with real mods). **NeoForge / Forge
-> 1.20.2+** and **legacy FML1 (1.7–1.12)** are **not supported** — see **Status** below for
-> why. Also note: connecting a 1.21.x bot to an older modded server still needs version
-> translation (e.g. [XinVia](https://github.com/huangdihd/XinVia)), which is separate.
+> ⚠️ **Experimental (`0.1.0-SNAPSHOT`, pre-release).** Validated against live servers; see the
+> **Status** table for exactly what was tested and the known limits.
 
 ---
 
 ## What it does
 
-Joining a modded server depends on the loader, and the loaders are genuinely different — so
-there is no single "universal handshake". XinModBridge is a **detect-and-respond** bridge:
+Joining a modded server depends on the loader, and the loaders are genuinely different. XinModBridge
+handles each, plus a tolerant decoder so the connection survives modded packets the vanilla protocol
+library can't parse:
 
 | Loader | Handling |
 |---|---|
-| **Vanilla / Fabric / Quilt** | Nothing needed — they are protocol-vanilla; connect directly. |
-| **Forge FML2/FML3** (MC ~1.15–1.20.1) | ✅ Answer the `fml:loginwrapper` login queries; **echo** the server's mod list / channels / registries back so a mod-less bot is accepted. The handshake-address marker must match the server's FML net version: `FML2` for ≤ 1.16.x, `FML3` for ≥ 1.18. |
-| **NeoForge** (MC 1.20.2+) | ⛔ Configuration-phase `neoforge:` handshake. Mapped but **not supported** — see Status. |
-| **Forge FML1** (MC 1.7–1.12) | ⛔ PLAY-phase `FML\|HS` handshake — **not implemented.** |
-
-It only targets the common **"does the client have these mods/channels"** style of check.
-Mods that do **behavioural** checks (compute-and-respond, anti-cheat handshakes) cannot be
-spoofed and are out of scope.
+| **Vanilla / Fabric / Quilt** | Nothing needed — protocol-vanilla; connect directly. |
+| **Forge FML2 / FML3** (MC ~1.15–1.20.1) | LOGIN-phase `fml:loginwrapper` handshake — echo the server's mod list / channels back. Marker must match the server's FML net version: `FML2` for ≤1.16.x, `FML3` for ≥1.18. |
+| **Forge FML1** (MC 1.7–1.12) | PLAY-phase `FML\|HS` handshake state machine (ServerHello → ClientHello + ModList → Ack chain). |
+| **NeoForge / Forge 1.20.2+** (MC 1.20.2+) | CONFIGURATION-phase handshake, driven by wrapping mcprotocollib's `ClientListener` so the client declares its channels *before* the server gathers its config tasks; answers the config Ping barrier, echoes the modded-network queries, acks the extensible-enum check. |
+| **Any modded server (PLAY)** | **Tolerant decoding** — drops individual packets that reference modded registry entries mcprotocollib can't decode, so the bot stays connected. |
 
 ## Usage
 
@@ -49,7 +43,7 @@ depend:
 </dependency>
 ```
 
-Code — attach the bridge in your meta plugin's `onEnable()`:
+Attach the bridge in your meta plugin's `onEnable()`:
 
 ```java
 import xin.bbtt.modbridge.XinModBridgeProvider;
@@ -59,41 +53,55 @@ import xin.bbtt.modbridge.ModBridgeOptions;
 private FmlLoginHandshakeListener bridge;
 
 public void onEnable() {
-    // Default: reactive FML handshake with the FML3 hostname marker (needed so the
-    // server switches into FML mode — without it the bot is treated as vanilla).
+    // Defaults: FML3 marker, NeoForge handshake, and tolerant decoding all on.
     bridge = XinModBridgeProvider.attach(this);
 
-    // For older Forge servers (MC ≤ 1.16.x, FML net version 2), use the FML2 marker:
+    // Tuned example — older Forge (FML2), plus declaring a mod's own config channel:
     // bridge = XinModBridgeProvider.attach(this, ModBridgeOptions.builder()
-    //         .fmlMarkerVersion("FML2").build());
+    //         .fmlMarkerVersion("FML2")
+    //         .extraConfigChannels("yourmod:sync")
+    //         .build());
 }
 ```
 
-The listener is unregistered automatically when your plugin is disabled.
+The listener is unregistered automatically when your plugin is disabled (or via
+`XinModBridgeProvider.detach`).
 
-It composes with [XinVia](https://github.com/huangdihd/XinVia): a meta plugin can
-`depend: [XinVia, XinModBridge]` to reach a server that is both cross-version and modded.
+It composes with [XinVia](https://github.com/huangdihd/XinVia): `depend: [XinVia, XinModBridge]`
+to reach a server that is both cross-version and modded.
+
+## API
+
+- **`XinModBridgeProvider`** — `attach(plugin)`, `attach(plugin, options)`, `detach(plugin, listener)`.
+- **`ModBridgeOptions`** (builder):
+  - `injectFmlMarker(boolean)` / `fmlMarkerVersion(String)` — FML2/FML3 handshake-address marker.
+  - `handleNeoForgeConfiguration(boolean)` — drive the NeoForge config-phase handshake.
+  - `tolerantDecoding(boolean)` — drop un-decodable modded packets to stay connected.
+  - `extraConfigChannels(String...)` — declare additional (mod-specific) config channels.
+  - `answerUnknownLoginQueries(boolean)`.
+- **`ModLoader`** — `VANILLA / FORGE_FML1 / FORGE_FML2 / FORGE_FML3 / NEOFORGE`.
+- **`NeoForgeClientListenerWrapper`** / **`FmlLoginHandshakeListener`** — the session listeners
+  `attach` registers; usable directly if you manage registration yourself.
 
 ## Status
 
 | Target | Status |
 |---|---|
-| Forge FML2/FML3 — MC 1.15.2, 1.16.5, 1.18.2, 1.20.1 (+ real mods) | ✅ Validated against live servers — bot completes the handshake and joins |
-| NeoForge / Forge 1.20.2+ (configuration phase) | ⛔ Not supported (see below) |
-| Forge FML1 — MC 1.7–1.12 (`FML\|HS`) | ⛔ Not implemented |
+| Forge FML2/FML3 — MC 1.15.2 / 1.16.5 / 1.18.2 / 1.20.1 (+ real mods) | ✅ **Handshake** validated against live servers |
+| Forge FML1 — MC 1.12.2 (`FML\|HS`) | ✅ **Handshake** validated against a live server (incl. with JEI) |
+| NeoForge — MC 1.21.11 (NeoForge 21.11.42) | ✅ **Joins and stays connected** (real xinbot bot, version-matched) |
 
-**Why NeoForge can't be done from here.** NeoForge negotiates its modded network in the
-CONFIGURATION phase. Its `CommonVersion`/`CommonRegister` tasks are only registered if the
-connection already `hasChannel(...)` for them *at the moment `RegisterConfigurationTasksEvent`
-fires* — i.e. at the very start of config, before any client payload is processed. A reactive
-`SessionListener` that declares channels via `minecraft:register` does so too late (verified:
-the replies are sent and received, but the server has already decided its task set). Completing
-it requires driving the client's config-phase state machine the way a real NeoForge client does,
-which is below the mcprotocollib layer this plugin works at. The full protocol trace is kept in
-`NeoForgeConfigHandshake`; run with `-Dmodbridge.dumpNeoForge=true` to reproduce.
+**Known limits (honest):**
+- **Tolerant decoding drops data it can't parse.** The bot stays *connected* to a modded server,
+  but mcprotocollib is a vanilla protocol library — packets carrying modded registry entries are
+  dropped, so the bot's view of the world is incomplete. Fine for presence / chat / basic actions;
+  not a full modded client.
+- **The FML handshake is validated; "joining and staying" was fully exercised on NeoForge** (where
+  the bot is version-matched to the server). For FML1/2/3, connecting a 1.21.x bot to those older
+  servers additionally requires version translation (e.g. [XinVia](https://github.com/huangdihd/XinVia)),
+  which is a separate concern.
 
-**FML1** (1.7–1.12) uses a PLAY-phase `FML|HS` handshake (REGISTER + `FML|HS` ServerHello →
-ClientHello → ModList → …). It is reactively feasible but not yet implemented.
+Trace any handshake with `-Dmodbridge.dumpNeoForge=true`.
 
 ## Building
 

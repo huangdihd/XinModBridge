@@ -38,6 +38,12 @@ public final class XinModBridgeProvider {
     public static FmlLoginHandshakeListener attach(Plugin owner, ModBridgeOptions options) {
         FmlLoginHandshakeListener listener = new FmlLoginHandshakeListener(options);
         Bot.INSTANCE.addPacketListener(listener, owner);
+        if (options.handleNeoForgeConfiguration() || options.tolerantDecoding()) {
+            // Wraps mcprotocollib's ClientListener to drive the NeoForge configuration-phase
+            // handshake (needs to act at config entry, which a plain listener can't) and to
+            // install the tolerant decoder that keeps modded connections alive.
+            Bot.INSTANCE.addPacketListener(new NeoForgeClientListenerWrapper(options), owner);
+        }
         return listener;
     }
 
