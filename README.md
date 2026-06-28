@@ -85,21 +85,24 @@ to reach a server that is both cross-version and modded.
 
 ## Status
 
+All validated with a **real 1.21.11 xinbot bot joining** the server (for old servers, via
+[XinVia](https://github.com/huangdihd/XinVia) 1.1.0 `setupClient` translation):
+
 | Target | Status |
 |---|---|
-| Forge FML2/FML3 — MC 1.15.2 / 1.16.5 / 1.18.2 / 1.20.1 (+ real mods) | ✅ **Handshake** validated against live servers |
-| Forge FML1 — MC 1.12.2 (`FML\|HS`) | ✅ **Handshake** validated against a live server (incl. with JEI) |
-| NeoForge — MC 1.21.11 (NeoForge 21.11.42) | ✅ **Joins and stays connected** (real xinbot bot, version-matched) |
+| Forge FML3 — MC 1.20.1 (+ real mods) | ✅ **Joins** (XinVia 1.21.11→1.20.1 + FML handshake) |
+| Forge FML2 — MC 1.16.5 | ✅ **Joins** (XinVia 1.21.11→1.16.5 + FML handshake) |
+| Forge FML1 — MC 1.12.2 (`FML\|HS`) | ✅ **Joins** (XinVia 1.21.11→1.12.2 + PLAY-phase FML handshake) |
+| NeoForge — MC 1.21.11 | ✅ **Joins and stays** (version-matched, no translation) |
 
-**Known limits (honest):**
-- **Tolerant decoding drops data it can't parse.** The bot stays *connected* to a modded server,
-  but mcprotocollib is a vanilla protocol library — packets carrying modded registry entries are
-  dropped, so the bot's view of the world is incomplete. Fine for presence / chat / basic actions;
-  not a full modded client.
-- **The FML handshake is validated; "joining and staying" was fully exercised on NeoForge** (where
-  the bot is version-matched to the server). For FML1/2/3, connecting a 1.21.x bot to those older
-  servers additionally requires version translation (e.g. [XinVia](https://github.com/huangdihd/XinVia)),
-  which is a separate concern.
+Also handshake-validated natively on Forge 1.15.2 / 1.18.2.
+
+**Known limit (honest):** tolerant decoding *drops* packets carrying modded registry entries
+that mcprotocollib's vanilla decoders can't parse, so the bot stays *connected* but its view
+of the world is incomplete — fine for presence / chat / basic actions, not a full modded client.
+Joining old modded servers requires [XinVia](https://github.com/huangdihd/XinVia) 1.1.0+ for
+version translation: `depend: [XinVia, XinModBridge]`, call `XinViaProvider.setupClient(channel,
+targetVersion)` on the first packet, then `XinModBridgeProvider.attach(this)`.
 
 Trace any handshake with `-Dmodbridge.dumpNeoForge=true`.
 
